@@ -1030,21 +1030,85 @@ function buildWSSavedList(){
       </div>
     </div>`;
 }
-function enterWorkspace(){
-  const raw=document.getElementById('ws-name-input')?.value?.trim().toLowerCase();
-  const sheetsUrl=(document.getElementById('ws-sheets-url')?.value||'').trim();
-  const errEl=document.getElementById('ws-error');
-  errEl.textContent='';
-  if(!raw){ errEl.textContent='Digite um nome para o espaço.'; return; }
-  if(!/^[a-z0-9-]+$/.test(raw)){ errEl.textContent='Use apenas letras minúsculas, números e hífens.'; return; }
-  currentWS=raw;
-  saveWorkspaceToList(raw);
-  // Save Sheets URL if provided
-  if(sheetsUrl && sheetsUrl.startsWith('https://script.google.com')){
-    localStorage.setItem(`ws_${raw}_sheets_url`, sheetsUrl);
-  }
+
   document.getElementById('workspace-screen').style.display='none';
   _loadWorkspaceData();
+}
+  async function enterWorkspace(){
+  const raw = document.getElementById('ws-name-input')?.value?.trim().toLowerCase();
+  const sheetsUrl = (document.getElementById('ws-sheets-url')?.value || '').trim();
+  const errEl = document.getElementById('ws-error');
+
+  errEl.textContent = '';
+
+  if(!raw){
+    errEl.textContent = 'Digite um nome para o espaço.';
+    return;
+  }
+
+  if(!/^[a-z0-9-]+$/.test(raw)){
+    errEl.textContent = 'Use apenas letras minúsculas, números e hífens.';
+    return;
+  }
+
+  // 🔥 NOVO: gera ID do workspace
+  const workspaceId = btoa(raw);
+
+  try {
+
+    // 🔍 SE TIVER URL → tenta buscar no Sheets
+    if(sheetsUrl && sheetsUrl.startsWith('https://script.google.com')){
+
+      const response = await fetch(`${sheetsUrl}?workspace=${workspaceId}`);
+      const result = await response.json();
+
+      if(result.exists){
+        console.log("✅ Workspace encontrado no Sheets");
+
+        // salva URL e workspace
+        currentWS = raw;
+        saveWorkspaceToList(raw);
+        localStorage.setItem(`ws_${raw}_sheets_url`, sheetsUrl);
+
+        document.getElementById('workspace-screen').style.display='none';
+
+        // 👉 força salvar os dados vindos do Sheets
+        if(result.data){
+          localStorage.setItem(wsKey('polyData2'), JSON.stringify(result.data));
+        }
+
+        _loadWorkspaceData();
+        return;
+
+      } else {
+        console.log("🆕 Workspace não existe → será criado");
+
+        // cria no backend
+        await fetch(sheetsUrl, {
+          method: "POST",
+          body: JSON.stringify({
+            workspace: workspaceId,
+            name: raw
+          })
+        });
+      }
+    }
+
+    // 👉 fluxo normal (mantido)
+    currentWS = raw;
+    saveWorkspaceToList(raw);
+
+    if(sheetsUrl && sheetsUrl.startsWith('https://script.google.com')){
+      localStorage.setItem(`ws_${raw}_sheets_url`, sheetsUrl);
+    }
+
+    document.getElementById('workspace-screen').style.display='none';
+    _loadWorkspaceData();
+
+  } catch (error){
+    console.error(error);
+    errEl.textContent = "Erro ao conectar com Google Sheets";
+  }
 }
 
 function _loadWorkspaceData(){
