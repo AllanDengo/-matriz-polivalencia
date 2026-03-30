@@ -562,24 +562,15 @@ td.td-cov-label{position:sticky;left:0;z-index:10;background:var(--bg2);padding:
     <!-- Create/enter workspace -->
     <div style="background:var(--white);border:1.5px solid var(--border2);border-radius:var(--r-lg);padding:24px;">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-2);margin-bottom:14px;">Novo espaço / Entrar</div>
-      <div style="margin-bottom:12px;">
+      <div style="margin-bottom:18px;">
         <label style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text-2);display:block;margin-bottom:5px;">Nome do Espaço</label>
         <input id="ws-name-input" type="text" placeholder="Ex: logistica-empresa, cd-norte, rh-sp…"
           style="width:100%;padding:10px 13px;border:1.5px solid var(--border2);border-radius:var(--r-sm);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--bg);outline:none;box-sizing:border-box;transition:border-color .2s;"
           onfocus="this.style.borderColor='var(--amber)'" onblur="this.style.borderColor='var(--border2)'"
-          onkeydown="if(event.key==='Enter') document.getElementById('ws-sheets-url').focus()">
-        <div style="font-size:10px;color:var(--text-3);margin-top:4px;">Use apenas letras, números e hífens.</div>
-      </div>
-      <div style="margin-bottom:18px;">
-        <label style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text-2);display:block;margin-bottom:5px;">
-          URL do Google Sheets <span style="font-weight:400;text-transform:none;color:var(--text-3);">(opcional — para acessar espaço existente)</span>
-        </label>
-        <input id="ws-sheets-url" type="text" placeholder="https://script.google.com/macros/s/…/exec"
-          style="width:100%;padding:10px 13px;border:1.5px solid var(--border2);border-radius:var(--r-sm);font-family:'DM Mono',monospace;font-size:11px;color:var(--text);background:var(--bg);outline:none;box-sizing:border-box;transition:border-color .2s;"
-          onfocus="this.style.borderColor='#0F9D58'" onblur="this.style.borderColor='var(--border2)'"
           onkeydown="if(event.key==='Enter') enterWorkspace()">
-        <div style="font-size:10px;color:var(--text-3);margin-top:4px;">Se estiver entrando em um espaço existente de outro dispositivo, cole a URL aqui para sincronizar automaticamente.</div>
+        <div style="font-size:10px;color:var(--text-3);margin-top:4px;">Use apenas letras, números e hífens. Se o espaço já existir, os dados carregam automaticamente ☁</div>
       </div>
+      <input id="ws-sheets-url" type="hidden" value="">
       <div id="ws-error" style="font-size:11px;color:#C0394A;margin-bottom:8px;min-height:16px;font-weight:500;"></div>
       <button onclick="enterWorkspace()" style="width:100%;padding:11px;background:var(--brown);color:#fff;border:none;border-radius:var(--r-sm);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:filter .15s;" onmouseover="this.style.filter='brightness(1.18)'" onmouseout="this.style.filter='none'">Entrar →</button>
     </div>
