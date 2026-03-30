@@ -872,10 +872,39 @@ td.td-cov-label{position:sticky;left:0;z-index:10;background:var(--bg2);padding:
 
     <!-- Status bar -->
     <div id="sync-status-bar" style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:var(--r-sm);margin-bottom:8px;background:var(--bg2);border:1px solid var(--border);">
-      <div id="sync-dot" style="width:8px;height:8px;border-radius:50%;background:var(--text-3);flex-shrink:0;"></div>
-      <span id="sync-status-text" style="font-size:11.5px;color:var(--text-2);">Não configurado — insira a URL do Apps Script abaixo</span>
+      <div id="sync-dot" style="width:8px;height:8px;border-radius:50%;background:var(--green);flex-shrink:0;"></div>
+      <span id="sync-status-text" style="font-size:11.5px;color:var(--text-2);">☁ Google Cloud Storage ativo — sync automático a cada 30s</span>
       <span id="sync-last" style="font-size:10px;color:var(--text-3);margin-left:auto;"></span>
     </div>
+
+    <!-- GCS Actions -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+      <button onclick="gcsPush()"
+        style="display:flex;align-items:center;gap:6px;padding:9px 16px;background:#1a73e8;color:#fff;border:none;border-radius:var(--r-sm);font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;cursor:pointer;transition:filter .15s;"
+        onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='none'">
+        ↑ Publicar no Cloud Storage
+      </button>
+      <button onclick="gcsPull().then(ok=>ok?render():showToast('Nenhum dado encontrado.'))"
+        style="display:flex;align-items:center;gap:6px;padding:9px 16px;background:#34a853;color:#fff;border:none;border-radius:var(--r-sm);font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;cursor:pointer;transition:filter .15s;"
+        onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='none'">
+        ↓ Buscar do Cloud Storage
+      </button>
+    </div>
+
+    <details style="border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;margin-bottom:16px;">
+      <summary style="padding:10px 14px;background:var(--bg2);cursor:pointer;font-size:11px;font-weight:700;color:#1a73e8;list-style:none;display:flex;align-items:center;gap:6px;">
+        ▶ Como funciona o Google Cloud Storage
+      </summary>
+      <div style="padding:14px 16px;background:var(--bg);font-size:11.5px;color:var(--text-2);line-height:2;">
+        <strong style="color:var(--text);">Compartilhar com outra pessoa:</strong><br>
+        Basta passar o <strong>nome do espaço</strong> — ex: <code style="background:var(--bg2);padding:1px 5px;border-radius:3px;">${currentWS||'painellogistica'}</code><br>
+        A pessoa acessa o site, digita o nome e os dados carregam automaticamente da nuvem.<br><br>
+        <strong style="color:var(--text);">Sync automático:</strong> cada ✦ Salvar envia para a nuvem. Outros dispositivos recebem em até 30s.
+      </div>
+    </details>
+
+    <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text-3);margin-bottom:10px;">☁ Backup via Google Sheets (opcional)</div>
     <div id="sync-iframe-warning" style="display:none;padding:8px 10px;background:#FFF8E6;border:1px solid rgba(255,166,0,.3);border-radius:var(--r-sm);margin-bottom:14px;font-size:11px;color:#8B6000;line-height:1.6;">
       ⚠ <strong>Os botões "Publicar" e "Buscar" funcionam apenas quando o arquivo é aberto diretamente no Chrome/Edge</strong> (fora do preview). Para usar dentro do preview, use o botão <strong>📋 Importar via texto</strong>.
     </div>
@@ -1003,6 +1032,59 @@ const WS_LIST_KEY = 'cd_workspaces';
 let currentWS = '';
 function wsKey(key){ return currentWS ? `ws_${currentWS}_${key}` : `ws_default_${key}`; }
 
+/* ═══ GOOGLE CLOUD STORAGE CONFIG ═══ */
+const GCS_BUCKET = 'cabruca-dengo';
+const GCS_API_KEY = 'AIzaSyDGDpMrJJHu-T-eFPhNYgb-Ca2CB1JvXuc';
+const GCS_BASE = `https://storage.googleapis.com`;
+const GCS_UPLOAD = `https://storage.googleapis.com/upload/storage/v1/b/${GCS_BUCKET}/o`;
+const GCS_READ   = (ws) => `${GCS_BASE}/${GCS_BUCKET}/workspaces/${ws}.json`;
+const GCS_WRITE  = (ws) => `${GCS_UPLOAD}?uploadType=media&name=workspaces%2F${ws}.json&key=${GCS_API_KEY}`;
+
+async function gcsPush(silent=false){
+  if(!currentWS) return;
+  try {
+    const payload = JSON.stringify({version:1, exportedAt:new Date().toISOString(), workspace:currentWS, data});
+    const resp = await fetch(GCS_WRITE(currentWS), {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: payload
+    });
+    if(!resp.ok) throw new Error(`GCS write failed: ${resp.status}`);
+    if(!silent) showToast('✓ Sincronizado na nuvem!');
+    _syncStatusUpdate('ok');
+  } catch(e){
+    if(!silent) showToast(`Erro ao salvar na nuvem: ${e.message}`);
+    _syncStatusUpdate('error', e.message);
+  }
+}
+
+async function gcsPull(silent=false){
+  if(!currentWS) return false;
+  try {
+    const resp = await fetch(GCS_READ(currentWS)+'?t='+Date.now());
+    if(resp.status===404) return false; // workspace doesn't exist yet
+    if(!resp.ok) throw new Error(`GCS read failed: ${resp.status}`);
+    const parsed = await resp.json();
+    const imported = parsed.version===1 ? parsed.data : parsed;
+    if(!imported||!imported.tasks||!imported.collabs) return false;
+    data = imported;
+    localStorage.setItem(wsKey('polyData2'), JSON.stringify(data));
+    if(!silent) showToast('✓ Dados carregados da nuvem!');
+    _syncStatusUpdate('ok');
+    return true;
+  } catch(e){
+    return false;
+  }
+}
+
+async function gcsWorkspaceExists(wsName){
+  try {
+    const resp = await fetch(`${GCS_BASE}/${GCS_BUCKET}/workspaces/${wsName}.json?t=${Date.now()}`);
+    return resp.ok;
+  } catch(e){ return false; }
+}
+
+
 function getWorkspaces(){
   return JSON.parse(localStorage.getItem(WS_LIST_KEY)||'[]');
 }
@@ -1039,12 +1121,30 @@ function enterWorkspace(){
   if(!/^[a-z0-9-]+$/.test(raw)){ errEl.textContent='Use apenas letras minúsculas, números e hífens.'; return; }
   currentWS=raw;
   saveWorkspaceToList(raw);
-  // Save Sheets URL if provided
   if(sheetsUrl && sheetsUrl.startsWith('https://script.google.com')){
     localStorage.setItem(`ws_${raw}_sheets_url`, sheetsUrl);
   }
   document.getElementById('workspace-screen').style.display='none';
-  _loadWorkspaceData();
+
+  // Show loading screen while checking GCS
+  _showPullingScreen();
+
+  // Check if workspace exists in GCS
+  gcsWorkspaceExists(raw).then(exists=>{
+    document.getElementById('ws-pulling-screen')?.remove();
+    if(exists){
+      // Pull from GCS then show login
+      gcsPull(true).then(()=>{
+        const sub=document.getElementById('login-ws-label');
+        if(sub) sub.textContent=`Espaço: ${currentWS}`;
+        document.getElementById('login-screen').style.display='flex';
+        showToast('✓ Espaço encontrado na nuvem!');
+      });
+    } else {
+      // New workspace
+      _loadWorkspaceData();
+    }
+  });
 }
 
 function _loadWorkspaceData(){
@@ -1219,25 +1319,29 @@ function _dataHash(){ return JSON.stringify(data).length + '_' + (data.collabs||
 function saveData(){
   localStorage.setItem(wsKey('polyData2'), JSON.stringify(data));
   showToast('✓ Salvo!');
-  // Auto-push to Sheets if configured
-  if(getSheetsURL()){
-    clearTimeout(_syncDebounce);
-    _syncDebounce = setTimeout(()=>{
-      pushToSheets(true); // silent=true
-    }, 1500); // debounce 1.5s to avoid flooding
-  }
+  // Auto-push to GCS (primary) with debounce
+  clearTimeout(_syncDebounce);
+  _syncDebounce = setTimeout(()=>{
+    gcsPush(true);
+    // Also push to Sheets if configured (backup)
+    if(getSheetsURL()) pushToSheets(true);
+  }, 1500);
 }
 
 function startAutoSync(){
   if(_autoSyncTimer) clearInterval(_autoSyncTimer);
-  if(!getSheetsURL()) return;
-  // Pull every 60 seconds
+  // Pull from GCS every 30 seconds
   _autoSyncTimer = setInterval(async ()=>{
-    if(!getSheetsURL()) return;
-    await _silentPull();
-  }, 60000);
-  // Also pull immediately on start
-  setTimeout(_silentPull, 3000);
+    const pulled = await gcsPull(true);
+    if(pulled) render();
+    // Also pull from Sheets if configured
+    else if(getSheetsURL()) await _silentPull();
+  }, 30000);
+  // Pull immediately on start (after 3s)
+  setTimeout(async ()=>{
+    const pulled = await gcsPull(true);
+    if(pulled) render();
+  }, 3000);
 }
 
 async function _silentPull(){
