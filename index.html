@@ -763,7 +763,7 @@ td.td-cov-label{position:sticky;left:0;z-index:10;background:var(--bg2);padding:
       <span id="sync-status-text" style="font-size:11.5px;color:var(--text-2);">Não configurado — insira a URL do Apps Script abaixo</span>
       <span id="sync-last" style="font-size:10px;color:var(--text-3);margin-left:auto;"></span>
     </div>
-    <div style="padding:8px 10px;background:#FFF8E6;border:1px solid rgba(255,166,0,.3);border-radius:var(--r-sm);margin-bottom:14px;font-size:11px;color:#8B6000;line-height:1.6;">
+    <div id="sync-iframe-warning" style="display:none;padding:8px 10px;background:#FFF8E6;border:1px solid rgba(255,166,0,.3);border-radius:var(--r-sm);margin-bottom:14px;font-size:11px;color:#8B6000;line-height:1.6;">
       ⚠ <strong>Os botões "Publicar" e "Buscar" funcionam apenas quando o arquivo é aberto diretamente no Chrome/Edge</strong> (fora do preview). Para usar dentro do preview, use o botão <strong>📋 Importar via texto</strong>.
     </div>
 
@@ -963,7 +963,67 @@ let data = JSON.parse(localStorage.getItem('polyData2')) || JSON.parse(JSON.stri
 let activeCat = 'ALL';
 
 /* ═══ UTILS ═══ */
-function saveData(){ localStorage.setItem('polyData2',JSON.stringify(data)); showToast('✓ Dados salvos!'); }
+let _autoSyncTimer = null;
+let _lastDataHash = '';
+let _syncDebounce = null;
+
+function _dataHash(){ return JSON.stringify(data).length + '_' + (data.collabs||[]).length; }
+
+function saveData(){
+  localStorage.setItem('polyData2', JSON.stringify(data));
+  showToast('✓ Salvo!');
+  // Auto-push to Sheets if configured
+  if(getSheetsURL()){
+    clearTimeout(_syncDebounce);
+    _syncDebounce = setTimeout(()=>{
+      pushToSheets(true); // silent=true
+    }, 1500); // debounce 1.5s to avoid flooding
+  }
+}
+
+function startAutoSync(){
+  if(_autoSyncTimer) clearInterval(_autoSyncTimer);
+  if(!getSheetsURL()) return;
+  // Pull every 60 seconds
+  _autoSyncTimer = setInterval(async ()=>{
+    if(!getSheetsURL()) return;
+    await _silentPull();
+  }, 60000);
+  // Also pull immediately on start
+  setTimeout(_silentPull, 3000);
+}
+
+async function _silentPull(){
+  const url = getSheetsURL();
+  if(!url) return;
+  try {
+    const resp = await fetch(url+'?t='+Date.now());
+    const text = await resp.text();
+    if(!text||text==='{}'||text.trim()==='') return;
+    let parsed;
+    try { parsed = JSON.parse(text); } catch(e){ return; }
+    if(typeof parsed==='string') parsed=JSON.parse(parsed);
+    const imported = parsed.version===1 ? parsed.data : parsed;
+    if(!imported||!imported.tasks||!imported.collabs) return;
+    // Only update if data is newer/different
+    const newHash = JSON.stringify(imported);
+    if(newHash === JSON.stringify(data)) return; // no changes
+    data = imported;
+    localStorage.setItem('polyData2', JSON.stringify(data));
+    render();
+    _syncStatusUpdate('ok');
+    // Subtle notification — not intrusive
+    _showSyncPulse();
+  } catch(e){ /* silent fail */ }
+}
+
+function _showSyncPulse(){
+  const dot = document.getElementById('sync-dot');
+  if(!dot) return;
+  dot.style.transform='scale(1.6)';
+  setTimeout(()=>dot.style.transform='scale(1)', 600);
+}
+
 function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); }
 function initials(n){ return n.split(' ').slice(0,2).map(w=>w[0]).join(''); }
 function scClass(v){ if(v===null)return 'sc-na'; if(v===0)return 'sc-0'; if(v===0.5)return 'sc-half'; if(v===1)return 'sc-1'; if(v===2)return 'sc-2'; return 'sc-3'; }
@@ -2682,6 +2742,8 @@ function _enterApp(isMgr){
   }
   render();
   _initSheetsUI();
+  startAutoSync();
+  startAutoSync();
   showToast(isMgr?'✓ Bem-vindo, gestor!':'✓ Acesso autorizado!');
 }
 
@@ -3308,7 +3370,8 @@ function saveSheetURL(){
   }
   localStorage.setItem(SHEETS_URL_KEY, url);
   _syncStatusUpdate('configured');
-  showToast('✓ URL salva! Clique em "Publicar" para enviar os dados.');
+  startAutoSync();
+  showToast('✓ URL salva! Sync automático ativado — dados serão sincronizados a cada 60s.');
 }
 
 function _syncStatusUpdate(state, msg){
@@ -3317,11 +3380,11 @@ function _syncStatusUpdate(state, msg){
   const last = document.getElementById('sync-last');
   if(!dot) return;
   const states = {
-    configured: ['#FFA600','URL configurada — pronto para sincronizar'],
-    syncing:    ['#4285F4','Sincronizando…'],
-    ok:         ['#0F9D58','Sincronizado com Google Sheets'],
+    configured: ['#FFA600','URL configurada — sync automático ativo a cada 60s'],
+    syncing:    ['#4285F4','Publicando…'],
+    ok:         ['#0F9D58','✓ Sincronizado — auto-sync ativo'],
     error:      ['#C0394A', msg||'Erro na sincronização'],
-    pulling:    ['#4285F4','Buscando dados do Sheets…'],
+    pulling:    ['#4285F4','Buscando dados…'],
   };
   const [color, label] = states[state]||['var(--text-3)','Não configurado'];
   dot.style.background = color;
@@ -3335,54 +3398,37 @@ function _syncStatusUpdate(state, msg){
   }
 }
 
-async function pushToSheets(){
+async function pushToSheets(silent=false){
   const url = getSheetsURL();
-  if(!url){ showToast('Configure a URL do Google Sheets primeiro.'); return; }
-  _syncStatusUpdate('syncing');
-
+  if(!url){ if(!silent) showToast('Configure a URL do Google Sheets primeiro.'); return; }
+  if(!silent) _syncStatusUpdate('syncing');
+  const payload = JSON.stringify({version:1, exportedAt:new Date().toISOString(), data});
   try {
-    const payload = JSON.stringify({version:1, exportedAt:new Date().toISOString(), data});
-
-    // Method 1: form POST via hidden iframe — never blocked by CORS or sandbox
-    await new Promise((resolve, reject)=>{
-      // Create hidden iframe as target
-      const ifrId = 'sync-iframe-'+Date.now();
-      const iframe = document.createElement('iframe');
-      iframe.name = ifrId;
-      iframe.style.cssText = 'display:none;width:0;height:0;border:none;position:fixed;left:-9999px;';
-      document.body.appendChild(iframe);
-
-      // Create hidden form
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = url;
-      form.target = ifrId;
-      form.style.display = 'none';
-
-      const input = document.createElement('input');
-      input.type = 'hidden';
-      input.name = 'payload';
-      input.value = payload;
-      form.appendChild(input);
-      document.body.appendChild(form);
-
-      // Submit
-      form.submit();
-
-      // Clean up after 4s (form POST has no readable response due to CORS, but it reaches the server)
-      setTimeout(()=>{
-        iframe.remove();
-        form.remove();
-        resolve();
-      }, 4000);
-    });
-
+    // Try fetch first (works on GitHub Pages)
+    await fetch(url, { method:'POST', mode:'no-cors', body:payload, headers:{'Content-Type':'text/plain'} });
     _syncStatusUpdate('ok');
-    showToast('✓ Dados enviados ao Google Sheets!');
-
+    if(!silent) showToast('✓ Dados enviados ao Google Sheets!');
   } catch(e) {
-    _syncStatusUpdate('error', e.message);
-    showToast(`Erro ao publicar: ${e.message}`);
+    // Fallback: form POST via hidden iframe (works in sandboxed contexts)
+    try {
+      await new Promise((resolve)=>{
+        const ifrId='sync-iframe-'+Date.now();
+        const iframe=document.createElement('iframe');
+        iframe.name=ifrId; iframe.style.cssText='display:none;position:fixed;left:-9999px;';
+        document.body.appendChild(iframe);
+        const form=document.createElement('form');
+        form.method='POST'; form.action=url; form.target=ifrId; form.style.display='none';
+        const inp=document.createElement('input');
+        inp.type='hidden'; inp.name='payload'; inp.value=payload;
+        form.appendChild(inp); document.body.appendChild(form);
+        form.submit();
+        setTimeout(()=>{ iframe.remove(); form.remove(); resolve(); }, 4000);
+      });
+      _syncStatusUpdate('ok');
+      if(!silent) showToast('✓ Dados enviados!');
+    } catch(e2){
+      if(!silent){ _syncStatusUpdate('error',e2.message); showToast(`Erro: ${e2.message}`); }
+    }
   }
 }
 
@@ -3390,61 +3436,53 @@ async function pullFromSheets(){
   const url = getSheetsURL();
   if(!url){ showToast('Configure a URL do Google Sheets primeiro.'); return; }
   _syncStatusUpdate('pulling');
+  try {
+    // Direct fetch works on GitHub Pages (not sandboxed)
+    const resp = await fetch(url+'?t='+Date.now());
+    const text = await resp.text();
+    if(!text||text==='{}'||text.trim()==='') throw new Error('Nenhum dado publicado ainda. Clique em "Publicar" primeiro.');
+    let parsed;
+    try { parsed = JSON.parse(text); } catch(e){ throw new Error('Formato inválido — publique novamente.'); }
+    // handle double-encoded string
+    if(typeof parsed === 'string') parsed = JSON.parse(parsed);
+    const imported = parsed.version===1 ? parsed.data : parsed;
+    if(!imported||!imported.tasks||!imported.collabs) throw new Error('Dados incompletos no Sheets.');
+    data = imported;
+    saveData(); render();
+    _syncStatusUpdate('ok');
+    const dt = parsed.exportedAt ? new Date(parsed.exportedAt).toLocaleString('pt-BR') : '—';
+    showToast(`✓ Dados atualizados! Publicado em: ${dt}`);
+  } catch(e){
+    // Fallback: JSONP for environments that block fetch
+    _pullJSONP(url);
+  }
+}
 
-  return new Promise((resolve)=>{
-    const cbName = '_sc_'+Date.now();
-    let done = false;
-
-    function handleData(raw){
-      if(done) return;
-      done = true;
-      delete window[cbName];
-      document.getElementById('_sc_script')?.remove();
-      try {
-        // raw may be object (JSONP parsed) or string (cell value)
-        let parsed = (typeof raw === 'string') ? JSON.parse(raw) : raw;
-        // if it's still a string (double encoded), parse again
-        if(typeof parsed === 'string') parsed = JSON.parse(parsed);
-        const imported = parsed.version===1 ? parsed.data : parsed;
-        if(!imported || !imported.tasks || !imported.collabs)
-          throw new Error('Nenhum dado publicado ainda. Clique em "Publicar" primeiro.');
-        data = imported;
-        saveData(); render();
-        _syncStatusUpdate('ok');
-        const dt = parsed.exportedAt ? new Date(parsed.exportedAt).toLocaleString('pt-BR') : '—';
-        showToast(`✓ Dados atualizados! Publicado em: ${dt}`);
-      } catch(e){
-        _syncStatusUpdate('error', e.message);
-        showToast(`Erro ao buscar: ${e.message}`);
-      }
-      resolve();
-    }
-
-    function handleError(msg){
-      if(done) return;
-      done = true;
-      delete window[cbName];
-      document.getElementById('_sc_script')?.remove();
-      _syncStatusUpdate('error', msg);
-      showToast(`Erro ao buscar: ${msg}`);
-      resolve();
-    }
-
-    // Register global callback for JSONP
-    window[cbName] = handleData;
-
-    // Inject script tag (JSONP — bypasses CORS)
-    const s = document.createElement('script');
-    s.id = '_sc_script';
-    s.src = `${url}?callback=${cbName}&t=${Date.now()}`;
-    s.onerror = ()=> handleError('Falha ao carregar dados (verifique a URL e a implantação)');
-    document.head.appendChild(s);
-
-    // Timeout 12s
-    setTimeout(()=>{
-      if(!done) handleError('Tempo esgotado — verifique a URL e tente novamente');
-    }, 12000);
-  });
+function _pullJSONP(url){
+  const cbName = '_sc_'+Date.now();
+  let done = false;
+  function handleData(raw){
+    if(done) return; done=true;
+    delete window[cbName];
+    document.getElementById('_sc_script')?.remove();
+    try {
+      let parsed = (typeof raw==='string') ? JSON.parse(raw) : raw;
+      if(typeof parsed==='string') parsed=JSON.parse(parsed);
+      const imported = parsed.version===1 ? parsed.data : parsed;
+      if(!imported||!imported.tasks||!imported.collabs) throw new Error('Dados incompletos.');
+      data=imported; saveData(); render();
+      _syncStatusUpdate('ok');
+      const dt=parsed.exportedAt?new Date(parsed.exportedAt).toLocaleString('pt-BR'):'—';
+      showToast(`✓ Dados atualizados! Publicado em: ${dt}`);
+    } catch(e){ _syncStatusUpdate('error',e.message); showToast(`Erro: ${e.message}`); }
+  }
+  window[cbName]=handleData;
+  const s=document.createElement('script');
+  s.id='_sc_script';
+  s.src=`${url}?callback=${cbName}&t=${Date.now()}`;
+  s.onerror=()=>{ if(done)return; done=true; delete window[cbName]; s.remove(); _syncStatusUpdate('error','Falha ao carregar dados'); showToast('Erro ao buscar dados.'); };
+  document.head.appendChild(s);
+  setTimeout(()=>{ if(!done){ done=true; delete window[cbName]; document.getElementById('_sc_script')?.remove(); _syncStatusUpdate('error','Tempo esgotado'); showToast('Tempo esgotado — tente novamente.'); }},12000);
 }
 
 function showPasteImport(){
@@ -3716,6 +3754,10 @@ function render(){
 }
 
 // ── INIT ──
+// Show iframe warning only when sandboxed
+if(window.self !== window.top){
+  document.getElementById('sync-iframe-warning').style.display='block';
+}
 checkSession();
 if(isTeamLoggedIn){
   // Resume session — show app directly
