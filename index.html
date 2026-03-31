@@ -2028,16 +2028,6 @@ function addCardTask(ci){
   const listEl=document.getElementById('ce-tasks-list');
   if(listEl) listEl.innerHTML=_cardTasksHTML(ci);
 }
-function addCardTask(ci){
-  const sel = document.getElementById('ce-new-task');
-  const val = sel?.value?.trim();
-  if(!val){ showToast('Selecione uma tarefa da lista.'); return; }
-  if(!data.collabs[ci].tasks) data.collabs[ci].tasks=[];
-  if(data.collabs[ci].tasks.includes(val)){ showToast('Essa tarefa já está na lista do colaborador.'); return; }
- 
-  if(listEl) listEl.innerHTML=_cardTasksHTML(ci);
-}
-
 function removeCardTask(ci, ti){
   if(!data.collabs[ci] || !data.collabs[ci].tasks) return;
   data.collabs[ci].tasks.splice(ti,1);
