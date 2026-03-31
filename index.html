@@ -2004,10 +2004,30 @@ function _cardTasksHTML(ci){
         onmouseover="this.style.color='#C0394A'" onmouseout="this.style.color='var(--text-3)'" title="Remover">×</button>
     </div>`).join('');
 }
-data.collabs[ci].tasks.push(val);
+function addCardTask(ci){
+  const sel = document.getElementById('ce-new-task');
+  const val = sel?.value?.trim();
+
+  if(!val){ 
+    showToast('Selecione uma tarefa da lista.'); 
+    return; 
+  }
+
+  if(!data.collabs[ci].tasks) data.collabs[ci].tasks=[];
+
+  if(data.collabs[ci].tasks.includes(val)){ 
+    showToast('Essa tarefa já está na lista do colaborador.'); 
+    return; 
+  }
+
+  // ✅ AQUI estava o erro — agora está no lugar certo
+  data.collabs[ci].tasks.push(val);
   sel.value='';
   saveData();
+
   const listEl=document.getElementById('ce-tasks-list');
+  if(listEl) listEl.innerHTML=_cardTasksHTML(ci);
+}
 function addCardTask(ci){
   const sel = document.getElementById('ce-new-task');
   const val = sel?.value?.trim();
