@@ -1832,6 +1832,7 @@ function buildCards(){
           <div class="dc-badges">
             <span class="badge" style="background:#FFF3CC;color:#7A5000;border:1px solid rgba(255,166,0,.3);">⏱ ${c.shift||'—'}</span>
             <span class="badge" style="background:var(--bg2);color:var(--text-2);border:1px solid var(--border);">${c.setor}</span>
+            ${c.isReferencia?`<span class="badge" style="background:#FFF3CC;color:#8B6000;border:1px solid rgba(255,166,0,.4);">★ Referência</span>`:''}
           </div>
         </div>
         <button onclick="openCardEdit(${ci})" title="Editar colaborador"
@@ -1923,7 +1924,20 @@ function openCardEdit(ci){
 
         <!-- Tasks section -->
         <div style="border-top:1px solid var(--border);padding-top:14px;">
-          <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-2);margin-bottom:10px;">Tarefas Responsável</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-2);">Tarefas Responsável</div>
+            <!-- Referência toggle -->
+            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;padding:5px 10px;border-radius:20px;border:1.5px solid ${c.isReferencia?'var(--amber)':'var(--border2)'};background:${c.isReferencia?'#FFF3CC':'var(--bg)'};transition:all .2s;" id="ref-label-${ci}">
+              <div style="position:relative;width:32px;height:18px;flex-shrink:0;">
+                <input type="checkbox" id="ce-referencia" ${c.isReferencia?'checked':''} onchange="_toggleReferencia(${ci},this)"
+                  style="opacity:0;width:0;height:0;position:absolute;">
+                <div id="ref-track-${ci}" style="width:32px;height:18px;border-radius:9px;background:${c.isReferencia?'var(--amber)':'var(--border2)'};transition:background .2s;position:relative;">
+                  <div id="ref-thumb-${ci}" style="width:14px;height:14px;border-radius:50%;background:#fff;position:absolute;top:2px;left:${c.isReferencia?'16px':'2px'};transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.2);"></div>
+                </div>
+              </div>
+              <span style="font-size:10px;font-weight:700;color:${c.isReferencia?'#8B6000':'var(--text-3)'};" id="ref-lbl-${ci}">${c.isReferencia?'★ Referência':'Referência'}</span>
+            </label>
+          </div>
           <div id="ce-tasks-list" style="margin-bottom:10px;">${tasksListHTML()}</div>
 
           <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:8px;align-items:center;">
@@ -1962,8 +1976,22 @@ function openCardEdit(ci){
   document.getElementById('ce-name')?.focus();
 }
 
+function _toggleReferencia(ci, checkbox){
+  data.collabs[ci].isReferencia = checkbox.checked;
+  // Update toggle visual
+  const track = document.getElementById(`ref-track-${ci}`);
+  const thumb = document.getElementById(`ref-thumb-${ci}`);
+  const lbl   = document.getElementById(`ref-lbl-${ci}`);
+  const label = document.getElementById(`ref-label-${ci}`);
+  if(track) track.style.background = checkbox.checked ? 'var(--amber)' : 'var(--border2)';
+  if(thumb) thumb.style.left = checkbox.checked ? '16px' : '2px';
+  if(lbl)   { lbl.style.color = checkbox.checked ? '#8B6000' : 'var(--text-3)'; lbl.textContent = checkbox.checked ? '★ Referência' : 'Referência'; }
+  if(label) { label.style.borderColor = checkbox.checked ? 'var(--amber)' : 'var(--border2)'; label.style.background = checkbox.checked ? '#FFF3CC' : 'var(--bg)'; }
+  saveData();
+  showToast(checkbox.checked ? `★ ${data.collabs[ci].name} marcado como Referência!` : `${data.collabs[ci].name} removido de Referência.`);
+}
+
 function _cardTasksHTML(ci){
-  const c = data.collabs[ci];
   if(!(c.tasks||[]).length)
     return '<div style="font-size:11px;color:var(--text-3);font-style:italic;padding:4px 0;">Nenhuma tarefa responsável.</div>';
   return c.tasks.map((tk,ti)=>`
@@ -2302,6 +2330,29 @@ function buildRadarSVG(myVals, teamVals, labels, colors){
   return `<svg viewBox="0 0 380 330" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:380px;">${gridSVG}${axes}${rLbls}${teamPoly}${myPoly}${dots}${lbls}</svg>`;
 }
 
+function _buildBarChart(container, snaps, vals, label){
+  const title=document.createElement('div');
+  title.style.cssText='font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text-3);margin-bottom:8px;';
+  title.textContent=label;
+  container.appendChild(title);
+  const chartWrap=document.createElement('div');
+  chartWrap.style.cssText='display:flex;align-items:flex-end;gap:4px;height:80px;padding:4px 0;border-bottom:1px solid var(--border);margin-bottom:8px;';
+  snaps.forEach((s,i)=>{
+    const pct=vals[i]||0;
+    const color=pct>=70?'#286B37':pct>=45?'#FFA600':'#C0394A';
+    const barH=Math.max(4,Math.round((pct/100)*68));
+    const col=document.createElement('div');
+    col.style.cssText='display:flex;flex-direction:column;align-items:center;flex:1;gap:3px;';
+    col.innerHTML=`
+      <span style="font-family:'DM Mono',monospace;font-size:8.5px;color:${color};font-weight:700;">${pct}%</span>
+      <div style="width:100%;height:${barH}px;background:${color};border-radius:3px 3px 0 0;"></div>
+      <span style="font-size:7.5px;color:var(--text-3);white-space:nowrap;">${new Date(s.date+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}</span>
+    `;
+    chartWrap.appendChild(col);
+  });
+  container.appendChild(chartWrap);
+}
+
 function buildAnalise(){
   const root=document.getElementById('analise-root');
   if(!root) return;
@@ -2603,43 +2654,85 @@ function buildAnalise(){
 
   if(collabSnaps.length>=2){
     const evoPanel=document.createElement('div'); evoPanel.className='a-panel';
-    evoPanel.innerHTML=`<div class="a-panel-head"><span class="a-panel-title">📈 Evolução de Polivalência</span><span style="font-size:10px;color:var(--text-3);">${collabSnaps.length} registros</span></div>`;
+    evoPanel.innerHTML=`<div class="a-panel-head"><span class="a-panel-title">📈 Evolução de Polivalência</span><span style="font-size:10px;color:var(--text-3);">${collabSnaps.length} snapshots</span></div>`;
     const evoBody=document.createElement('div'); evoBody.className='a-panel-body';
 
-    // Mini chart: bar per snapshot
-    const maxPct=Math.max(...collabSnaps.map(s=>s.entry.pct),1);
-    const chartWrap=document.createElement('div');
-    chartWrap.style.cssText='display:flex;align-items:flex-end;gap:6px;height:80px;padding:8px 0 4px;border-bottom:1px solid var(--border);margin-bottom:12px;';
-    collabSnaps.forEach((s,i)=>{
-      const pct=s.entry.pct;
-      const color=pct>=70?'#286B37':pct>=45?'#FFA600':'#C0394A';
-      const barH=Math.max(4,Math.round((pct/100)*70));
-      const col=document.createElement('div');
-      col.style.cssText='display:flex;flex-direction:column;align-items:center;flex:1;gap:4px;';
-      col.innerHTML=`
-        <span style="font-family:'DM Mono',monospace;font-size:9px;color:${color};font-weight:700;">${pct}%</span>
-        <div style="width:100%;height:${barH}px;background:${color};border-radius:3px 3px 0 0;transition:height .4s;"></div>
-        <span style="font-size:8px;color:var(--text-3);white-space:nowrap;">${new Date(s.date).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}</span>
-      `;
-      chartWrap.appendChild(col);
+    // ── Tabs: Foco vs Geral vs Setores
+    const tabBar=document.createElement('div');
+    tabBar.style.cssText='display:flex;gap:6px;margin-bottom:14px;';
+    ['Setor Principal','Todos os Setores','Por Setor'].forEach((lbl,ti)=>{
+      const b=document.createElement('button');
+      b.textContent=lbl;
+      b.dataset.ti=ti;
+      b.style.cssText=`padding:4px 12px;border-radius:20px;border:1.5px solid var(--border2);background:${ti===0?'var(--brown)':'var(--bg)'};color:${ti===0?'#fff':'var(--text-2)'};font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;`;
+      b.onclick=()=>{
+        tabBar.querySelectorAll('button').forEach(x=>{x.style.background='var(--bg)';x.style.color='var(--text-2)';x.style.borderColor='var(--border2)';});
+        b.style.background='var(--brown)';b.style.color='#fff';b.style.borderColor='var(--brown)';
+        evoBody.querySelectorAll('.evo-chart').forEach((el,i)=>el.style.display=i===ti?'block':'none');
+      };
+      tabBar.appendChild(b);
     });
-    evoBody.appendChild(chartWrap);
+    evoBody.appendChild(tabBar);
 
-    // Delta summary
-    const first=collabSnaps[0].entry.pct;
-    const last=collabSnaps[collabSnaps.length-1].entry.pct;
+    // ── Chart 0: Setor Principal (focused score)
+    const chart0=document.createElement('div'); chart0.className='evo-chart';
+    const vals0=collabSnaps.map(s=>s.entry.pctFocused??s.entry.pct);
+    _buildBarChart(chart0, collabSnaps, vals0, `% no Setor Principal${c.isReferencia?' (Referência — usa score geral)':''}`);
+    evoBody.appendChild(chart0);
+
+    // ── Chart 1: Score geral (todos setores)
+    const chart1=document.createElement('div'); chart1.className='evo-chart'; chart1.style.display='none';
+    const vals1=collabSnaps.map(s=>s.entry.pctAll??s.entry.pct);
+    _buildBarChart(chart1, collabSnaps, vals1, '% Polivalência Geral (todos os setores)');
+    evoBody.appendChild(chart1);
+
+    // ── Chart 2: Por setor (linhas)
+    const chart2=document.createElement('div'); chart2.className='evo-chart'; chart2.style.display='none';
+    const cats=getCategories();
+    const catColors={};
+    cats.forEach(cat=>{const cfg=CAT_CFG[cat]||{dot:'#888'};catColors[cat]=cfg.dot;});
+    // Legend
+    const legend=document.createElement('div');
+    legend.style.cssText='display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;';
+    cats.forEach(cat=>{
+      // Check if this collab has data in this cat in at least 1 snap
+      const hasData=collabSnaps.some(s=>s.entry.sectors&&s.entry.sectors[cat]!==undefined);
+      if(!hasData) return;
+      const chip=document.createElement('span');
+      chip.style.cssText=`display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--text-2);`;
+      chip.innerHTML=`<span style="width:8px;height:8px;border-radius:50%;background:${catColors[cat]};flex-shrink:0;"></span>${cat}`;
+      legend.appendChild(chip);
+    });
+    chart2.appendChild(legend);
+    // Mini table per sector
+    cats.forEach(cat=>{
+      const hasData=collabSnaps.some(s=>s.entry.sectors&&s.entry.sectors[cat]!==undefined);
+      if(!hasData) return;
+      const row=document.createElement('div');
+      row.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:8px;';
+      const catVals=collabSnaps.map(s=>(s.entry.sectors&&s.entry.sectors[cat]!==undefined)?s.entry.sectors[cat]:0);
+      const lastVal=catVals[catVals.length-1];
+      const color=lastVal>=70?'#286B37':lastVal>=45?'#FFA600':'#C0394A';
+      row.innerHTML=`
+        <span style="font-size:10px;font-weight:700;color:${catColors[cat]};width:90px;flex-shrink:0;">${cat}</span>
+        <div style="flex:1;height:6px;border-radius:3px;background:var(--bg3);overflow:hidden;">
+          <div style="height:100%;width:${lastVal}%;background:${color};border-radius:3px;"></div>
+        </div>
+        <span style="font-family:'DM Mono',monospace;font-size:11px;color:${color};width:34px;text-align:right;">${lastVal}%</span>
+        ${collabSnaps.length>1?`<span style="font-size:10px;width:36px;text-align:right;color:${catVals[catVals.length-1]-catVals[0]>0?'#286B37':catVals[catVals.length-1]-catVals[0]<0?'#C0394A':'var(--text-3)'};">${catVals[catVals.length-1]-catVals[0]>0?'↑':'↓'}${Math.abs(catVals[catVals.length-1]-catVals[0])}%</span>`:''}
+      `;
+      chart2.appendChild(row);
+    });
+    evoBody.appendChild(chart2);
+
+    // ── Delta summary
+    const first=vals0[0]; const last=vals0[vals0.length-1];
     const delta=last-first;
     const deltaColor=delta>0?'#286B37':delta<0?'#C0394A':'var(--text-2)';
-    const deltaIcon=delta>0?'↑':delta<0?'↓':'→';
-
     const summary=document.createElement('div');
-    summary.style.cssText='display:flex;gap:16px;flex-wrap:wrap;';
-    [
-      {label:'Início',val:`${first}%`,color:'var(--text-2)'},
-      {label:'Atual',val:`${last}%`,color:last>=70?'#286B37':last>=45?'#FFA600':'#C0394A'},
-      {label:'Evolução',val:`${deltaIcon}${Math.abs(delta)}%`,color:deltaColor},
-      {label:'Período',val:`${collabSnaps.length} snapshots`,color:'var(--text-2)'},
-    ].forEach(item=>{
+    summary.style.cssText='display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);';
+    [{label:'Início',val:`${first}%`,color:'var(--text-2)'},{label:'Atual (foco)',val:`${last}%`,color:last>=70?'#286B37':last>=45?'#FFA600':'#C0394A'},{label:'Evolução',val:`${delta>0?'↑':delta<0?'↓':'→'}${Math.abs(delta)}%`,color:deltaColor},{label:c.isReferencia?'★ Referência':'Foco: '+(_getPrimaryCat(c)||'Geral'),val:'',color:'var(--text-2)'}].forEach(item=>{
+      if(!item.val) return;
       const d=document.createElement('div');
       d.style.cssText='text-align:center;flex:1;min-width:70px;';
       d.innerHTML=`<div style="font-family:'Fraunces',serif;font-size:20px;font-weight:700;color:${item.color};">${item.val}</div><div style="font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin-top:2px;">${item.label}</div>`;
@@ -2735,29 +2828,77 @@ let activeTurno = 'ALL';
 function getSnapshots(){ return JSON.parse(localStorage.getItem(SNAP_KEY())||'[]'); }
 function saveSnapshot(){
   const snaps = getSnapshots();
-  const today = new Date().toISOString().slice(0,10);
-  // build snapshot: {date, collabs:[{name,pct}]}
+  const now = new Date();
+  const today = now.toISOString().slice(0,10);
+  const monthKey = today.slice(0,7); // YYYY-MM
+
   const snap = {
     date: today,
+    month: monthKey,
     collabs: data.collabs.map(c=>{
-      const app = data.tasks.filter(t=>c.scores.hasOwnProperty(t.id)&&c.scores[t.id]!==null);
-      const pct = app.length ? app.reduce((s,t)=>s+(c.scores[t.id]||0),0)/(app.length*3)*100 : 0;
-      return {name:c.name, pct:Math.round(pct)};
+      const pctAll    = Math.round(_scoreAll(c));
+      const pctFocused= Math.round(_scoreFocused(c));
+      const primaryCat= _getPrimaryCat(c);
+      // Per-sector breakdown
+      const sectors={};
+      getCategories().forEach(cat=>{
+        const s=_scoreSector(c,cat);
+        if(s>0) sectors[cat]=Math.round(s);
+      });
+      return {
+        name: c.name,
+        setor: c.setor,
+        isReferencia: c.isReferencia||false,
+        pct: c.isReferencia ? pctAll : pctFocused, // main score
+        pctAll,
+        pctFocused,
+        primaryCat,
+        sectors
+      };
     })
   };
-  // Replace if same date
+
   const idx = snaps.findIndex(s=>s.date===today);
   if(idx>=0) snaps[idx]=snap; else snaps.push(snap);
-  // Keep last 20
-  if(snaps.length>20) snaps.splice(0,snaps.length-20);
+  if(snaps.length>24) snaps.splice(0,snaps.length-24);
   localStorage.setItem(SNAP_KEY(), JSON.stringify(snaps));
   showToast('✓ Snapshot salvo! Histórico atualizado.');
 }
 
 function collabScore(c){
+  // Referência: score geral (todos os setores)
+  // Normal: score focado no setor principal
+  return c.isReferencia ? _scoreAll(c) : _scoreFocused(c);
+}
+
+function _scoreAll(c){
   const app=data.tasks.filter(t=>c.scores.hasOwnProperty(t.id)&&c.scores[t.id]!==null);
   return app.length?app.reduce((s,t)=>s+(c.scores[t.id]||0),0)/(app.length*3)*100:0;
 }
+
+function _scoreFocused(c){
+  // Score only tasks in the collaborator's primary sector
+  const primaryCat = _getPrimaryCat(c);
+  const catTasks = primaryCat
+    ? data.tasks.filter(t=>t.cat===primaryCat&&c.scores.hasOwnProperty(t.id)&&c.scores[t.id]!==null)
+    : data.tasks.filter(t=>c.scores.hasOwnProperty(t.id)&&c.scores[t.id]!==null);
+  return catTasks.length?catTasks.reduce((s,t)=>s+(c.scores[t.id]||0),0)/(catTasks.length*3)*100:0;
+}
+
+function _scoreSector(c, cat){
+  const tasks=data.tasks.filter(t=>t.cat===cat&&c.scores.hasOwnProperty(t.id)&&c.scores[t.id]!==null);
+  return tasks.length?tasks.reduce((s,t)=>s+(c.scores[t.id]||0),0)/(tasks.length*3)*100:0;
+}
+
+function _getPrimaryCat(c){
+  const cats=getCategories();
+  // Match setor field to category name
+  return cats.find(cat=>
+    c.setor.toLowerCase().includes(cat.toLowerCase().split(' ')[0]) ||
+    cat.toLowerCase().includes(c.setor.toLowerCase().split(' ')[0])
+  ) || null;
+}
+
 
 function buildDashboard(){
   const root=document.getElementById('dashboard-root');
