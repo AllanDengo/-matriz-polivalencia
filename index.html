@@ -1990,11 +1990,10 @@ function _toggleReferencia(ci, checkbox){
   saveData();
   showToast(checkbox.checked ? `★ ${data.collabs[ci].name} marcado como Referência!` : `${data.collabs[ci].name} removido de Referência.`);
 }
+
 function _cardTasksHTML(ci){
-  const c=data.collabs[ci];
-  if(!c) return '';
   if(!(c.tasks||[]).length)
-     return '<div style="font-size:11px;color:var(--text-3);font-style:italic;padding:4px 0;">Nenhuma tarefa responsável.</div>';
+    return '<div style="font-size:11px;color:var(--text-3);font-style:italic;padding:4px 0;">Nenhuma tarefa responsável.</div>';
   return c.tasks.map((tk,ti)=>`
     <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">
       <div style="width:5px;height:5px;border-radius:50%;background:var(--amber);flex-shrink:0;"></div>
@@ -2004,34 +2003,21 @@ function _cardTasksHTML(ci){
         onmouseover="this.style.color='#C0394A'" onmouseout="this.style.color='var(--text-3)'" title="Remover">×</button>
     </div>`).join('');
 }
+
 function addCardTask(ci){
   const sel = document.getElementById('ce-new-task');
   const val = sel?.value?.trim();
-
-  if(!val){ 
-    showToast('Selecione uma tarefa da lista.'); 
-    return; 
-  }
-
+  if(!val){ showToast('Selecione uma tarefa da lista.'); return; }
   if(!data.collabs[ci].tasks) data.collabs[ci].tasks=[];
-
-  if(data.collabs[ci].tasks.includes(val)){ 
-    showToast('Essa tarefa já está na lista do colaborador.'); 
-    return; 
-  }
-
-  // ✅ AQUI estava o erro — agora está no lugar certo
+  if(data.collabs[ci].tasks.includes(val)){ showToast('Essa tarefa já está na lista do colaborador.'); return; }
   data.collabs[ci].tasks.push(val);
   sel.value='';
-  saveData();
-
   const listEl=document.getElementById('ce-tasks-list');
   if(listEl) listEl.innerHTML=_cardTasksHTML(ci);
 }
+
 function removeCardTask(ci, ti){
-  if(!data.collabs[ci] || !data.collabs[ci].tasks) return;
   data.collabs[ci].tasks.splice(ti,1);
-  saveData();
   const listEl=document.getElementById('ce-tasks-list');
   if(listEl) listEl.innerHTML=_cardTasksHTML(ci);
 }
