@@ -1363,6 +1363,10 @@ async function sbCarregarSessao(user){
 
     await sbPull();
 
+    // Flags do sistema antigo — necessárias para render()
+    isAuthenticated = true;
+    isTeamLoggedIn  = true;
+
     document.getElementById('workspace-screen').style.display='none';
     document.getElementById('login-screen').style.display='none';
     document.getElementById('app-root').style.display='block';
@@ -1390,22 +1394,27 @@ async function sbPull(silent=false){
   if(!SB||!currentUser?.orgId) return false;
   try{
     const r=await SB.from('workspace_data').select('data,fluxo_meta').eq('org_id',currentUser.orgId).maybeSingle();
+    if(r.error){
+      console.warn('sbPull workspace_data error (tabela pode não existir ainda):', r.error.message);
+      return false;
+    }
     if(r.data){
       const raw=r.data.data||{};
       data=_sbApplyAccessFilter(raw);
-      // Fluxo meta
       if(r.data.fluxo_meta) localStorage.setItem(wsKey('fluxo_meta'),JSON.stringify(r.data.fluxo_meta));
-      // Snapshots
+    }
+    // Snapshots
+    try{
       const rs=await SB.from('org_snapshots').select('snapshots').eq('org_id',currentUser.orgId).maybeSingle();
       if(rs.data) localStorage.setItem(SNAP_KEY(),JSON.stringify(rs.data.snapshots||[]));
-      localStorage.setItem(wsKey('last_sync_at'),new Date().toISOString());
-      if(!silent) showToast('✓ Dados carregados!');
-      return true;
-    }
-    // Sem dados ainda: iniciar vazio
-    data={categories:[],collabs:[],tasks:[]};
+    }catch(e){ console.warn('snapshots pull:',e.message); }
+    localStorage.setItem(wsKey('last_sync_at'),new Date().toISOString());
+    if(!silent) showToast('✓ Dados carregados!');
+    return true;
+  }catch(e){
+    console.warn('sbPull exception:',e.message);
     return false;
-  }catch(e){ console.warn('sbPull:',e); return false; }
+  }
 }
 
 async function sbPush(silent=true){
