@@ -1302,24 +1302,46 @@ async function sbFazerLogin(){
 async function sbCarregarSessao(user){
   const errEl=document.getElementById('sb-error');
   try{
-    // Buscar perfil
-    const rp=await SB.from('profiles').select('id,name,role,org_id,area_ids,subarea_ids,collaborator_id,active').eq('user_id',user.id).is('deleted_at',null).single();
-    if(rp.error||!rp.data){ if(errEl) errEl.textContent='Perfil não encontrado. Fale com o administrador.'; await SB.auth.signOut(); return; }
-    if(!rp.data.active){ if(errEl) errEl.textContent='Acesso desativado. Fale com o administrador.'; await SB.auth.signOut(); return; }
+    // Query simples sem filtro de deleted_at (evita problemas de RLS recursivo)
+    const rp=await SB.from('profiles')
+      .select('id,name,role,org_id,area_ids,subarea_ids,active')
+      .eq('user_id',user.id)
+      .maybeSingle();
+
+    if(rp.error){
+      if(errEl) errEl.textContent='Erro RLS: '+rp.error.message;
+      console.error('profiles error:',rp.error);
+      await SB.auth.signOut();
+      const btn=document.getElementById('sb-btn-login');
+      if(btn){btn.disabled=false;btn.textContent='Entrar';}
+      return;
+    }
+    if(!rp.data){
+      if(errEl) errEl.textContent='Perfil não encontrado para user_id: '+user.id;
+      console.warn('no profile for',user.id);
+      await SB.auth.signOut();
+      const btn=document.getElementById('sb-btn-login');
+      if(btn){btn.disabled=false;btn.textContent='Entrar';}
+      return;
+    }
+    if(!rp.data.active){
+      if(errEl) errEl.textContent='Acesso desativado. Fale com o administrador.';
+      await SB.auth.signOut();
+      return;
+    }
     const p=rp.data;
 
     // Buscar org
-    const ro=await SB.from('organizations').select('id,name,slug,primary_color').eq('id',p.org_id).single();
+    const ro=await SB.from('organizations').select('id,name,slug,primary_color').eq('id',p.org_id).maybeSingle();
     const org=ro.data||{};
 
     // Calcular áreas permitidas
-    let allowedAreas=null; // null = all
+    let allowedAreas=null;
     const roleNum=SB_ROLE_NUM[p.role]||1;
     if(roleNum<3 && (p.area_ids||[]).length){
-      const ra=await SB.from('areas').select('id,name').in('id',p.area_ids).is('deleted_at',null);
+      const ra=await SB.from('areas').select('id,name').in('id',p.area_ids);
       allowedAreas=(ra.data||[]).map(a=>a.name);
     } else if(roleNum<3){
-      // operational: área vazia = sem acesso além do próprio card
       allowedAreas=[];
     }
 
@@ -1332,18 +1354,15 @@ async function sbCarregarSessao(user){
       orgColor:org.primary_color||'#0D2B8C',
       areaIds:p.area_ids||[],
       subareaIds:p.subarea_ids||[],
-      allowedAreas, // null=all, array=filter
+      allowedAreas,
       collabName:'',
     };
     currentWS=org.slug||p.org_id;
 
-    // Registrar ultimo acesso
     SB.from('profiles').update({last_login_at:new Date().toISOString()}).eq('id',p.id).then(()=>{});
 
-    // Carregar dados
     await sbPull();
 
-    // Mostrar app
     document.getElementById('workspace-screen').style.display='none';
     document.getElementById('login-screen').style.display='none';
     document.getElementById('app-root').style.display='block';
@@ -1351,10 +1370,10 @@ async function sbCarregarSessao(user){
     render();
     showToast(`✓ Bem-vindo, ${currentUser.name}!`);
   }catch(e){
-    if(errEl) errEl.textContent='Erro ao carregar perfil: '+e.message;
+    if(errEl) errEl.textContent='Erro: '+e.message;
     console.error('sbCarregarSessao:',e);
     const btn=document.getElementById('sb-btn-login');
-    if(btn){ btn.disabled=false; btn.textContent='Entrar'; }
+    if(btn){btn.disabled=false;btn.textContent='Entrar';}
   }
 }
 
