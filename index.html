@@ -8065,10 +8065,13 @@ if(window.self !== window.top){
   }
 })();
 
-// Show workspace selector
-document.getElementById('login-screen').style.display='none';
-document.getElementById('app-root').style.display='none';
-loadGCSSpaces();
+// ── Startup: restore Supabase session or show login ──
+(async () => {
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app-root').style.display     = 'none';
+  await sbInitSession(); // if session exists → loads data and shows app
+  // if no session → login screen stays visible
+})();
 </script>
 </body>
 </html>
