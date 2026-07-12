@@ -1,30 +1,4 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Skilmapp — Gestão de Pessoas</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,400;0,600;0,700;1,300&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-:root{
-  --yellow:#00E5C0; --amber:#00B4D8; --pink:#7DD4FC;
-  --green:#00C896;  --orange:#4CC9F0; --brown:#0D2B8C;
-  --bg:#F0F5FF; --bg2:#E6EEFF; --bg3:#D6E4FF;
-  --white:#FFFFFF;
-  --border:rgba(13,43,140,.1); --border2:rgba(13,43,140,.18);
-  --text:#0A1533; --text-2:#3A5298; --text-3:#7A9CCF;
-  --r:10px; --r-sm:6px; --r-lg:16px;
-}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-html{font-size:14px;}
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased;}
-
-/* ── HEADER ── */
-.hd{background:linear-gradient(135deg,#0D2B8C 0%,#0063C6 100%);padding:0 36px;height:62px;display:flex;align-items:center;justify-content:space-between;gap:20px;position:sticky;top:0;z-index:200;box-shadow:0 2px 16px rgba(13,43,140,.3);}
-.hd-left{display:flex;align-items:center;gap:14px;}
-.hd-logo{width:46px;height:46px;border-radius:10px;background:#FFFFF4;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:3px;box-shadow:0 1px 6px rgba(0,0,0,.15);}
-.hd-title h1{font-family:'Fraunces',serif;font-size:15px;font-weight:600;color:#fff;letter-spacing:-.2px;}
+<
 .hd-title p{font-size:11px;color:rgba(255,255,255,.5);font-weight:300;margin-top:1px;}
 .hd-div{width:1px;height:26px;background:rgba(255,255,255,.1);flex-shrink:0;}
 .hd-stats{display:flex;gap:16px;}
