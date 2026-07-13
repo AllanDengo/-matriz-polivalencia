@@ -1068,28 +1068,44 @@ td.td-cov-label{position:sticky;left:0;z-index:10;background:var(--bg2);padding:
     <h3>✦ Adicionar Tarefa</h3>
     <div class="add-form">
       <div class="form-group"><label class="form-label">Nome da Tarefa</label><input class="form-input" id="taskName" placeholder="Ex: Conferência de NF"></div>
-      <div class="form-group"><label class="form-label">Categoria</label>
+      <div class="form-group"><label class="form-label">Categoria (setor principal)</label>
         <select class="form-input" id="taskCat" style="min-width:180px;cursor:pointer;"></select>
+      </div>
+      <div class="form-group" style="flex:1;min-width:220px;">
+        <label class="form-label">Setores vinculados <span style="font-weight:400;color:var(--text-3);">(além do principal — opcional)</span></label>
+        <div id="taskExtraSetores" style="display:flex;flex-wrap:wrap;gap:5px;padding:6px 8px;background:var(--bg);border:1.5px solid var(--border2);border-radius:var(--r-sm);min-height:36px;"></div>
       </div>
       <button class="btn-add" onclick="addTask()">+ Adicionar</button>
     </div>
   </div>
 
   <div class="add-panel">
+    <h3>✦ Tarefas Cadastradas</h3>
+    <div id="task-list-mgmt" style="display:flex;flex-direction:column;width:100%;"></div>
+  </div>
+
+  <div class="add-panel">
     <h3>✦ Gerenciar Setores</h3>
     <div style="font-size:11.5px;color:var(--text-2);margin-bottom:14px;font-weight:300;line-height:1.6;">Adicione ou remova categorias usadas nas tarefas.</div>
-    <!-- Add category -->
     <div class="add-form" style="margin-bottom:14px;">
       <div class="form-group"><label class="form-label">Nova Categoria</label><input class="form-input" id="newCatName" placeholder="Ex: Expedição" onkeydown="if(event.key==='Enter') addCategory()"></div>
       <button class="btn-add" onclick="addCategory()">+ Adicionar</button>
     </div>
-    <!-- Category list -->
     <div id="cat-list" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
   </div>
+
   <div class="add-panel">
-    <h3 style="display:flex;align-items:center;justify-content:space-between;">✦ Adicionar Colaborador
-    <button onclick="showBulkImport()" style="padding:5px 14px;background:none;border:1.5px solid var(--brown);border-radius:var(--r-sm);font-family:'DM Sans',sans-serif;font-size:11px;font-weight:700;color:var(--brown);cursor:pointer;transition:all .15s;" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='none'">📥 Importar em massa</button>
-  </h3>
+    <h3 style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">✦ Adicionar Colaborador
+      <div style="display:flex;gap:8px;">
+        <button onclick="downloadCollabTemplate()" title="Baixar modelo de planilha para preencher e importar"
+          style="padding:5px 14px;background:none;border:1.5px solid var(--brown);border-radius:var(--r-sm);font-family:'DM Sans',sans-serif;font-size:11px;font-weight:700;color:var(--brown);cursor:pointer;transition:all .15s;"
+          onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='none'">📄 Modelo de planilha</button>
+        <button onclick="showBulkImport()" style="padding:5px 14px;background:none;border:1.5px solid var(--brown);border-radius:var(--r-sm);font-family:'DM Sans',sans-serif;font-size:11px;font-weight:700;color:var(--brown);cursor:pointer;transition:all .15s;" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='none'">📥 Importar em massa</button>
+      </div>
+    </h3>
+    <div style="font-size:11px;color:var(--text-3);margin-bottom:12px;background:var(--bg2);padding:8px 12px;border-radius:var(--r-sm);line-height:1.6;">
+      💡 <strong>Colaborador ≠ Usuário do sistema.</strong> Cadastrar aqui coloca a pessoa na matriz (para você avaliar). Para dar <strong>acesso à plataforma</strong>, cadastre também em <em>Gerenciar Usuários</em> abaixo.
+    </div>
     <div class="add-form">
       <div class="form-group"><label class="form-label">Nome</label><input class="form-input" id="collabName" placeholder="Ex: Maria Silva"></div>
       <div class="form-group"><label class="form-label">Setor</label><input class="form-input" id="collabSetor" placeholder="Ex: Recebimento"></div>
@@ -1112,11 +1128,6 @@ td.td-cov-label{position:sticky;left:0;z-index:10;background:var(--bg2);padding:
     <h3>✦ Editar Colaboradores</h3>
     <p style="font-size:11px;color:var(--text-2);margin-bottom:14px;font-weight:300;">Clique em qualquer campo para editar. Pressione Enter ou clique fora para salvar.</p>
     <div id="collab-edit-table"></div>
-  </div>
-
-  <div class="add-panel">
-    <h3>✦ Tarefas Cadastradas</h3>
-    <div id="task-list-mgmt" style="display:flex;flex-direction:column;width:100%;"></div>
   </div>
 
 
@@ -2871,6 +2882,7 @@ function buildTaskMgmt(){
       row.innerHTML=`
         <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-3);flex-shrink:0;width:28px;">#${t.n}</span>
         <span style="flex:1;font-weight:500;">${t.name}</span>
+        ${(t.extraSetores||[]).length?`<span style="display:inline-flex;gap:4px;flex-wrap:wrap;">${(t.extraSetores||[]).map(s=>`<span style="font-size:9px;font-weight:600;padding:1px 7px;border-radius:8px;background:rgba(255,255,255,.7);color:var(--text-3);white-space:nowrap;" title="Setor vinculado">+ ${s}</span>`).join('')}</span>`:''}
       `;
 
       // Remove button — inline, no confirm()
@@ -2920,11 +2932,32 @@ function addTask(){
   const name=document.getElementById('taskName').value.trim();
   const cat=document.getElementById('taskCat').value;
   if(!name){showToast('Informe o nome da tarefa.');return;}
+  const extraSetores = Array.from(document.querySelectorAll('#taskExtraSetores button[data-on="1"]')).map(b=>b.dataset.setor);
   const id=Date.now();
-  data.tasks.push({id,n:data.tasks.length+1,name,cat});
+  data.tasks.push({id,n:data.tasks.length+1,name,cat,extraSetores});
   data.collabs.forEach(c=>c.scores[id]=null);
   document.getElementById('taskName').value='';
   saveData(); render(); showToast('✓ Tarefa adicionada!');
+}
+
+/* Toggle setor extra chip */
+function _toggleTaskExtraSetor(btn){
+  const on = btn.dataset.on === '1';
+  btn.dataset.on = on ? '0' : '1';
+  btn.style.background = on ? 'var(--bg)' : 'var(--brown)';
+  btn.style.color = on ? 'var(--text-2)' : '#fff';
+  btn.style.borderColor = on ? 'var(--border2)' : 'var(--brown)';
+}
+
+/* Populate extra setores chips */
+function _populateTaskExtraSetores(){
+  const wrap = document.getElementById('taskExtraSetores');
+  if(!wrap) return;
+  const cats = getCategories();
+  wrap.innerHTML = cats.length
+    ? cats.map(cat => `<button type="button" data-setor="${cat}" data-on="0" onclick="_toggleTaskExtraSetor(this)"
+        style="padding:3px 10px;border-radius:12px;border:1.5px solid var(--border2);background:var(--bg);color:var(--text-2);font-family:'DM Sans',sans-serif;font-size:10.5px;font-weight:600;cursor:pointer;transition:all .15s;">${cat}</button>`).join('')
+    : '<span style="font-size:10.5px;color:var(--text-3);padding:4px 8px;">Cadastre setores primeiro em "Gerenciar Setores".</span>';
 }
 
 function removeTask(id){
@@ -3019,6 +3052,8 @@ function buildCollabEditTable(){
         </select>
       </td>
       <td style="text-align:center;">
+        <button onclick="createUserFromCollab('${c.name.replace(/'/g,"\\'")}')" title="Criar acesso à plataforma"
+          style="padding:2px 7px;background:none;border:1.5px solid var(--brown);border-radius:6px;color:var(--brown);cursor:pointer;font-size:11px;margin-right:4px;">🔑</button>
         <button class="collab-remove-btn" onclick="removeCollab(${ci})" title="Remover colaborador">×</button>
       </td>
     </tr>`;
@@ -6574,7 +6609,7 @@ function activateTab(name, btn){
   if(name==='analise')   buildAnalise();
   if(name==='dashboard') switchDashSub(dashSubActive);
   if(name==='fluxo')     switchPESub(peSubActive);
-  if(name==='add'){ buildUserMgmt(); }
+  if(name==='add'){ buildUserMgmt(); _populateTaskExtraSetores(); }
 }
 
 function showAuthModal(targetTab, targetBtn){
@@ -7916,6 +7951,13 @@ function showBulkImport(){
     <div style="font-family:'Fraunces',serif;font-size:17px;font-weight:700;color:var(--brown);margin-bottom:6px;">📥 Importar Colaboradores</div>
     <div style="font-size:11.5px;color:var(--text-2);margin-bottom:12px;line-height:1.7;">Cole do Excel (uma pessoa por linha, colunas separadas por <strong>Tab</strong> ou <strong>;</strong>):<br><span style="font-family:'DM Mono',monospace;font-size:10.5px;background:var(--bg2);padding:2px 8px;border-radius:6px;">Nome ; Setor ; Cargo ; Turno ; Nível(1-5)</span> — só o Nome é obrigatório.</div>
     <textarea id="bulk-input" rows="8" placeholder="Maria Silva;Recebimento;Auxiliar;06:00–16:00;5\nJoão Souza;Expedição;Conferente" style="width:100%;padding:10px 12px;border:1.5px solid var(--border2);border-radius:var(--r-sm);font-family:'DM Mono',monospace;font-size:11.5px;color:var(--text);background:var(--bg);outline:none;resize:vertical;box-sizing:border-box;"></textarea>
+    <div style="margin-top:10px;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-3);">
+      <span>ou envie o arquivo do modelo:</span>
+      <label style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;background:none;border:1.5px solid var(--brown);border-radius:var(--r-sm);color:var(--brown);font-family:'DM Sans',sans-serif;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='none'">
+        📎 Escolher CSV
+        <input type="file" accept=".csv,.txt" style="display:none;" onchange="_readBulkFile(this)">
+      </label>
+    </div>
     <div id="bulk-msg" style="font-size:11px;min-height:16px;margin:8px 0;font-weight:500;"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;">
       <button onclick="document.getElementById('bulk-modal').remove()" style="padding:8px 16px;background:none;border:1.5px solid var(--border2);border-radius:var(--r-sm);font-family:'DM Sans',sans-serif;font-size:12px;color:var(--text-2);cursor:pointer;">Cancelar</button>
@@ -7927,6 +7969,19 @@ function showBulkImport(){
   document.getElementById('bulk-input')?.focus();
 }
 
+function _readBulkFile(input){
+  const f = input.files?.[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = e => {
+    let txt = e.target.result || '';
+    if(txt.charCodeAt(0)===0xFEFF) txt = txt.slice(1); // strip BOM
+    document.getElementById('bulk-input').value = txt;
+    showToast('✓ Arquivo carregado. Clique em Importar.');
+  };
+  r.readAsText(f);
+  input.value='';
+}
+
 function applyBulkImport(){
   const raw=(document.getElementById('bulk-input')?.value||'').trim();
   const msg=document.getElementById('bulk-msg');
@@ -7934,10 +7989,12 @@ function applyBulkImport(){
   const existing=new Set(data.collabs.map(x=>x.name.toLowerCase()));
   let added=0, skipped=0;
   raw.split('\n').forEach(line=>{
-    line=line.trim(); if(!line) return;
+    line=line.trim();
+    if(!line||line.startsWith('#')) return; // skip comments
     const parts=line.includes('\t')?line.split('\t'):line.split(';');
     const name=(parts[0]||'').trim();
-    if(!name||existing.has(name.toLowerCase())){ skipped++; return; }
+    // Skip header line
+    if(!name || name.toLowerCase()==='nome' || existing.has(name.toLowerCase())){ skipped++; return; }
     const scores={}; data.tasks.forEach(t=>scores[t.id]=null);
     data.collabs.push({
       name, setor:(parts[1]||'—').trim()||'—', cargo:(parts[2]||'').trim()||'Auxiliar',
@@ -7947,7 +8004,7 @@ function applyBulkImport(){
     existing.add(name.toLowerCase()); added++;
   });
   if(added){ saveData(); render(); sbAudit('bulk_import',{count:added}); }
-  msg.textContent=`✓ ${added} adicionado(s)${skipped?` · ${skipped} ignorado(s) (vazio/duplicado)`:''}`;
+  msg.textContent=`✓ ${added} adicionado(s)${skipped?` · ${skipped} ignorado(s) (vazio/duplicado/cabeçalho)`:''}`;
   msg.style.color=added?'var(--ok)':'var(--danger)';
   if(added) setTimeout(()=>document.getElementById('bulk-modal')?.remove(),1500);
 }
@@ -8218,6 +8275,64 @@ document.addEventListener('keydown', e=>{
   if(e.key==='Escape' && document.body.classList.contains('kiosk-mode')) toggleKiosk();
 });
 
+
+
+/* ── Modelo de planilha ── */
+function downloadCollabTemplate(){
+  const header = 'Nome;Setor;Cargo;Turno;Nivel(1-5)';
+  const rows = [
+    header,
+    'Maria Silva;Recebimento;Auxiliar de Logística;06:00-16:00;5',
+    'João Souza;Expedição;Conferente;14:00-22:00;5',
+    'Ana Costa;Recebimento;Líder de Turno;06:00-16:00;3',
+    '',
+    '# Instruções:',
+    '# - Uma pessoa por linha, separada por ";" (ou Tab se colar do Excel)',
+    '# - Apenas Nome é obrigatório',
+    '# - Nível: 1=Diretoria, 2=Gerência, 3=Coordenação, 4=Analista, 5=Operacional',
+    '# - Apague estas linhas comentadas antes de importar'
+  ];
+  // BOM para Excel abrir com acentos corretos
+  const blob = new Blob(['\uFEFF' + rows.join('\n')], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'modelo_colaboradores_skilmapp.csv';
+  a.click(); URL.revokeObjectURL(a.href);
+  showToast('✓ Modelo baixado! Preencha e importe em massa.');
+}
+
+/* ── Criar usuário a partir de colaborador ── */
+async function createUserFromCollab(collabName){
+  const c = data.collabs.find(x=>x.name===collabName);
+  if(!c){ showToast('Colaborador não encontrado.'); return; }
+  const email = prompt(`Criar acesso à plataforma para ${collabName}?\n\nDigite o e-mail:`, '');
+  if(!email||!email.includes('@')){ if(email!==null) showToast('E-mail inválido.'); return; }
+  const senhaTemp = prompt('Senha temporária (mín. 8 chars, maiúscula e número):','Skilmapp' + new Date().getFullYear() + '!');
+  if(!senhaTemp){ return; }
+  if(senhaTemp.length<8 || !/[A-Z]/.test(senhaTemp) || !/[0-9]/.test(senhaTemp)){
+    showToast('Senha deve ter 8+ chars, maiúscula e número.'); return;
+  }
+  const roleChoice = prompt('Perfil de acesso:\n1 = Operacional (só o próprio card)\n2 = Líder (área)\n3 = Gestor\n4 = Admin\n\nDigite 1, 2, 3 ou 4:','1');
+  const roleMap = {'1':'operational','2':'leader','3':'manager','4':'admin'};
+  const role = roleMap[roleChoice];
+  if(!role){ showToast('Perfil inválido.'); return; }
+
+  showToast('⏳ Criando acesso…');
+  try{
+    const r = await SB.auth.signUp({email:email.trim().toLowerCase(),password:senhaTemp});
+    if(r.error){ showToast('Erro: '+r.error.message); return; }
+    const userId = r.data?.user?.id;
+    if(!userId){ showToast('Não foi possível criar o usuário (verifique se e-mail já existe).'); return; }
+    const pr = await SB.from('profiles').insert({
+      user_id: userId, org_id: currentUser.orgId,
+      role, name: collabName, active: true,
+      collab_name: collabName, area_ids: [], subarea_ids: []
+    });
+    if(pr.error){ showToast('Perfil não criado: '+pr.error.message); return; }
+    alert(`✅ Acesso criado!\n\nE-mail: ${email}\nSenha temporária: ${senhaTemp}\n\nCompartilhe com ${collabName.split(' ')[0]} e peça para alterar a senha no primeiro acesso.`);
+    buildUserMgmt();
+  }catch(e){ showToast('Erro: '+e.message); }
+}
 
 /* ── Backup & Restore ── */
 function exportBackup(){
