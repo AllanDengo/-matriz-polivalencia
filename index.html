@@ -1122,6 +1122,30 @@ td.td-cov-label{position:sticky;left:0;z-index:10;background:var(--bg2);padding:
       </div>
       <button class="btn-add" onclick="addCollab()">+ Adicionar</button>
     </div>
+
+    <!-- ── OPCIONAL: criar acesso à plataforma ── -->
+    <div style="margin-top:16px;padding:14px 16px;background:var(--bg2);border-radius:var(--r-sm);border-left:3px solid var(--brown);">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:600;color:var(--brown);">
+        <input type="checkbox" id="collabCreateAccess" onchange="_toggleAccessFields(this.checked)" style="width:16px;height:16px;accent-color:var(--brown);cursor:pointer;">
+        🔑 Criar também acesso à plataforma para esta pessoa
+      </label>
+      <div id="collabAccessFields" style="display:none;margin-top:12px;">
+        <div class="add-form">
+          <div class="form-group"><label class="form-label">E-mail de acesso</label><input class="form-input" id="collabEmail" type="email" placeholder="maria.silva@empresa.com" style="min-width:220px;"></div>
+          <div class="form-group"><label class="form-label">Senha temporária</label><input class="form-input" id="collabSenha" type="text" placeholder="Mín. 8 chars, maiúscula + número" style="min-width:200px;"></div>
+          <div class="form-group"><label class="form-label">Perfil de acesso</label>
+            <select class="form-input" id="collabRole" style="min-width:180px;">
+              <option value="operational" selected>Operacional (só próprio card)</option>
+              <option value="leader">Líder (área)</option>
+              <option value="manager">Gestor</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
+          <button type="button" onclick="_generateTempPassword()" title="Gerar senha temporária forte" style="padding:5px 12px;background:none;border:1.5px solid var(--border2);border-radius:var(--r-sm);font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:var(--text-2);cursor:pointer;transition:all .15s;align-self:flex-end;" onmouseover="this.style.borderColor='var(--brown)';this.style.color='var(--brown)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text-2)'">🎲 Gerar senha</button>
+        </div>
+        <div style="font-size:10.5px;color:var(--text-3);margin-top:6px;line-height:1.5;">Ao clicar em <strong>+ Adicionar</strong>, o colaborador entra na matriz <em>e</em> o usuário é criado no Supabase, já vinculado.</div>
+      </div>
+    </div>
   </div>
 
   <div class="add-panel">
@@ -2966,22 +2990,87 @@ function removeTask(id){
   saveData(); render();
 }
 
-function addCollab(){
+async function addCollab(){
   const name=document.getElementById('collabName').value.trim();
   const setor=document.getElementById('collabSetor').value.trim()||'—';
   const cargo=document.getElementById('collabCargo').value.trim()||'Auxiliar de Logística';
   const shift=document.getElementById('collabShift').value.trim()||'—';
   const nivel=parseInt(document.getElementById('collabNivel')?.value||'5');
   if(!name){showToast('Informe o nome do colaborador.');return;}
+
+  // Check duplicate
+  if(data.collabs.some(c=>c.name.toLowerCase()===name.toLowerCase())){
+    showToast('Já existe um colaborador com esse nome.'); return;
+  }
+
+  // If "create access" is checked, validate BEFORE creating collab
+  const createAccess = document.getElementById('collabCreateAccess')?.checked;
+  let email='', senha='', role='';
+  if(createAccess){
+    email = (document.getElementById('collabEmail')?.value||'').trim().toLowerCase();
+    senha = document.getElementById('collabSenha')?.value||'';
+    role  = document.getElementById('collabRole')?.value||'operational';
+    if(!email||!email.includes('@')){ showToast('Informe um e-mail válido para o acesso.'); return; }
+    if(senha.length<8||!/[A-Z]/.test(senha)||!/[0-9]/.test(senha)){
+      showToast('Senha deve ter 8+ chars, com maiúscula e número.'); return;
+    }
+  }
+
   const scores={};
   data.tasks.forEach(t=>scores[t.id]=null);
   data.collabs.push({name,setor,cargo,shift,nivel,obs:'',tasks:[],scores});
+
+  // Create Supabase user if requested
+  if(createAccess && SB && currentUser?.orgId){
+    showToast('⏳ Criando acesso…');
+    try{
+      const r = await SB.auth.signUp({email, password:senha});
+      if(r.error){
+        showToast('Colaborador salvo, mas acesso não criado: '+r.error.message);
+      } else {
+        const userId = r.data?.user?.id;
+        if(userId){
+          const pr = await SB.from('profiles').insert({
+            user_id:userId, org_id:currentUser.orgId, role, name, active:true,
+            collab_name:name, area_ids:[], subarea_ids:[]
+          });
+          if(pr.error){ showToast('Colaborador salvo, perfil não criado: '+pr.error.message); }
+          else { alert(`✅ Acesso criado!\n\nE-mail: ${email}\nSenha temporária: ${senha}\n\nCompartilhe com ${name.split(' ')[0]} e peça para alterar a senha no primeiro acesso.`); }
+        }
+      }
+    }catch(e){ showToast('Erro ao criar acesso: '+e.message); }
+  }
+
+  // Reset form
   document.getElementById('collabName').value='';
   document.getElementById('collabSetor').value='';
   document.getElementById('collabCargo').value='';
   document.getElementById('collabShift').value='';
   if(document.getElementById('collabNivel')) document.getElementById('collabNivel').value='5';
-  saveData(); render(); sbAudit('collab_add',{name}); showToast('✓ Colaborador adicionado!');
+  const cb=document.getElementById('collabCreateAccess'); if(cb){ cb.checked=false; _toggleAccessFields(false); }
+  const em=document.getElementById('collabEmail'); if(em) em.value='';
+  const sn=document.getElementById('collabSenha'); if(sn) sn.value='';
+
+  saveData(); render(); sbAudit('collab_add',{name});
+  showToast(createAccess?'✓ Colaborador + acesso criados!':'✓ Colaborador adicionado!');
+}
+
+function _toggleAccessFields(show){
+  const f = document.getElementById('collabAccessFields');
+  if(f) f.style.display = show ? '' : 'none';
+}
+
+function _generateTempPassword(){
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const num = '23456789';
+  const low = 'abcdefghjkmnpqrstuvwxyz';
+  const spec = '!@#$';
+  const rand = arr => arr[Math.floor(Math.random()*arr.length)];
+  let pwd = rand(chars) + rand(low) + rand(low) + rand(low) + rand(num) + rand(num) + rand(low) + rand(spec);
+  // shuffle
+  pwd = pwd.split('').sort(()=>Math.random()-0.5).join('');
+  const inp = document.getElementById('collabSenha');
+  if(inp){ inp.value = pwd; inp.type='text'; showToast('🎲 Senha gerada — copie antes de salvar!'); }
 }
 
 const SHIFT_OPTIONS = [
