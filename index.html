@@ -1094,6 +1094,17 @@ td.td-cov-label{position:sticky;left:0;z-index:10;background:var(--bg2);padding:
     <div id="cat-list" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
   </div>
 
+  <!-- ── IMPORTAR DE USUÁRIOS SUPABASE ── -->
+  <div class="add-panel">
+    <h3 style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">👥 Importar de Usuários Cadastrados
+      <button onclick="loadSupabaseUsers()" style="padding:5px 14px;background:none;border:1.5px solid var(--brown);border-radius:var(--r-sm);font-family:'DM Sans',sans-serif;font-size:11px;font-weight:700;color:var(--brown);cursor:pointer;transition:all .15s;" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='none'">🔄 Atualizar lista</button>
+    </h3>
+    <div style="font-size:11px;color:var(--text-3);margin-bottom:12px;background:var(--bg2);padding:8px 12px;border-radius:var(--r-sm);line-height:1.6;">
+      💡 Pessoas com acesso à plataforma que <strong>ainda não estão na matriz</strong>. Clique em <strong>+ Importar</strong> para criar o card na matriz com os dados já cadastrados.
+    </div>
+    <div id="sb-users-list"></div>
+  </div>
+
   <div class="add-panel">
     <h3 style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">✦ Adicionar Colaborador
       <div style="display:flex;gap:8px;">
@@ -1212,7 +1223,7 @@ async function sbCarregarSessao(user){
   const errEl=document.getElementById('sb-error');
   try{
     const rp=await SB.from('profiles')
-      .select('id,name,role,org_id,area_ids,subarea_ids,active,collab_name')
+      .select('id,name,role,org_id,area_ids,subarea_ids,active,collab_name,must_change_password')
       .eq('user_id',user.id).maybeSingle();
     if(rp.error){
       if(errEl) errEl.textContent='Erro RLS: '+rp.error.message;
@@ -1258,6 +1269,11 @@ async function sbCarregarSessao(user){
     _updateTabsByRole(currentUser.role);
     render();
     showToast(`✓ Bem-vindo, ${currentUser.name}!`);
+
+    // Força alteração de senha se for o primeiro acesso
+    if(p.must_change_password){
+      setTimeout(()=>_forcePasswordChange(p.id), 500);
+    }
   }catch(e){
     if(errEl) errEl.textContent='Erro: '+e.message;
     console.error('sbCarregarSessao:',e);
@@ -3037,7 +3053,8 @@ async function addCollab(){
         if(userId){
           const pr = await SB.from('profiles').insert({
             user_id:userId, org_id:currentUser.orgId, role, name, active:true,
-            collab_name:name, area_ids:[], subarea_ids:[]
+            collab_name:name, area_ids:[], subarea_ids:[],
+            must_change_password: true
           });
           if(pr.error){ showToast('Colaborador salvo, perfil não criado: '+pr.error.message); }
           else { alert(`✅ Acesso criado!\n\nE-mail: ${email}\nSenha temporária: ${senha}\n\nCompartilhe com ${name.split(' ')[0]} e peça para alterar a senha no primeiro acesso.`); }
@@ -6703,7 +6720,7 @@ function activateTab(name, btn){
   if(name==='analise')   buildAnalise();
   if(name==='dashboard') switchDashSub(dashSubActive);
   if(name==='fluxo')     switchPESub(peSubActive);
-  if(name==='add'){ buildUserMgmt(); _populateTaskExtraSetores(); }
+  if(name==='add'){ buildUserMgmt(); _populateTaskExtraSetores(); loadSupabaseUsers(); }
 }
 
 function showAuthModal(targetTab, targetBtn){
@@ -6789,6 +6806,57 @@ function logout(){
   const matrizBtn = document.querySelector('.tab-btn:first-child');
   if(matrizBtn) activateTab('matriz', matrizBtn);
   loadGCSSpaces();
+}
+
+function _forcePasswordChange(profileId){
+  const overlay = document.createElement('div');
+  overlay.className='auth-overlay';
+  overlay.id = 'force-pw-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(13,43,140,.85);z-index:99999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);';
+  overlay.innerHTML=`
+    <div class="auth-box" style="max-width:420px;background:#fff;padding:32px;border-radius:16px;box-shadow:0 24px 64px rgba(0,0,0,.35);">
+      <div style="text-align:center;font-size:36px;margin-bottom:8px;">🔐</div>
+      <div style="font-family:'Fraunces',serif;font-size:20px;font-weight:700;color:var(--brown);text-align:center;margin-bottom:6px;">Defina sua senha</div>
+      <div style="font-size:12px;color:var(--text-2);text-align:center;margin-bottom:20px;line-height:1.6;">Este é seu primeiro acesso. Por segurança, você precisa criar uma senha pessoal antes de continuar.</div>
+      <input class="auth-input" id="fpw-new" type="password" placeholder="Nova senha" style="margin-bottom:8px;" oninput="_cpCheckStrength(this.value)">
+      <div style="margin-bottom:10px;">
+        <div style="display:flex;gap:4px;margin-bottom:4px;">
+          <div class="cp-bar" id="cp-b1" style="flex:1;height:4px;border-radius:2px;background:var(--border2);transition:background .2s;"></div>
+          <div class="cp-bar" id="cp-b2" style="flex:1;height:4px;border-radius:2px;background:var(--border2);transition:background .2s;"></div>
+          <div class="cp-bar" id="cp-b3" style="flex:1;height:4px;border-radius:2px;background:var(--border2);transition:background .2s;"></div>
+          <div class="cp-bar" id="cp-b4" style="flex:1;height:4px;border-radius:2px;background:var(--border2);transition:background .2s;"></div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;font-size:10px;">
+          <span id="cp-r-len"  style="color:var(--text-3);">✗ Mínimo 8 caracteres</span>
+          <span id="cp-r-up"   style="color:var(--text-3);">✗ Letra maiúscula</span>
+          <span id="cp-r-num"  style="color:var(--text-3);">✗ Número</span>
+          <span id="cp-r-spec" style="color:var(--text-3);">✗ Caractere especial (!@#$…)</span>
+        </div>
+      </div>
+      <input class="auth-input" id="fpw-confirm" type="password" placeholder="Confirmar nova senha" style="margin-bottom:4px;">
+      <div class="auth-error" id="fpw-error" style="color:var(--danger);font-size:11.5px;min-height:16px;font-weight:500;text-align:center;"></div>
+      <button class="auth-btn" onclick="_applyForcePwChange('${profileId}')" style="width:100%;padding:12px;background:linear-gradient(135deg,#FFB020,#FF9D00);color:#3A2500;border:none;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:800;cursor:pointer;margin-top:8px;">✓ Definir Senha e Continuar</button>
+    </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById('fpw-new')?.focus();
+}
+
+async function _applyForcePwChange(profileId){
+  const newVal = document.getElementById('fpw-new')?.value||'';
+  const confirmVal = document.getElementById('fpw-confirm')?.value||'';
+  const errDiv = document.getElementById('fpw-error');
+  if(!newVal||!confirmVal){ errDiv.textContent='Preencha os dois campos.'; return; }
+  const pwErr = _cpValidate(newVal);
+  if(pwErr){ errDiv.textContent = pwErr; return; }
+  if(newVal !== confirmVal){ errDiv.textContent='As senhas não coincidem.'; return; }
+  errDiv.textContent = '';
+  try{
+    const r = await SB.auth.updateUser({password: newVal});
+    if(r.error){ errDiv.textContent = 'Erro: '+r.error.message; return; }
+    await SB.from('profiles').update({must_change_password: false}).eq('id', profileId);
+    document.getElementById('force-pw-overlay')?.remove();
+    showToast('✓ Senha definida! Aproveite o sistema.');
+  }catch(e){ errDiv.textContent = 'Erro: '+e.message; }
 }
 
 function changePassword(){
@@ -8371,6 +8439,75 @@ document.addEventListener('keydown', e=>{
 
 
 
+
+/* ── Importar usuários Supabase para a matriz ── */
+async function loadSupabaseUsers(){
+  const root = document.getElementById('sb-users-list');
+  if(!root) return;
+  if(!SB||!currentUser?.orgId){ root.innerHTML='<div style="padding:12px;color:var(--text-3);font-size:12px;">Não conectado ao Supabase.</div>'; return; }
+  root.innerHTML='<div style="padding:12px;color:var(--text-3);font-size:12px;">⏳ Carregando…</div>';
+  const r = await SB.from('profiles').select('id,name,role,active,collab_name').eq('org_id',currentUser.orgId).is('deleted_at',null);
+  if(r.error){ root.innerHTML=`<div style="padding:12px;color:var(--danger);font-size:11.5px;">Erro: ${r.error.message}</div>`; return; }
+  const existing = new Set(data.collabs.map(c=>c.name.toLowerCase()));
+  // Filter: users not yet in matrix (by name OR by collab_name link)
+  const available = (r.data||[]).filter(u => {
+    if(!u.name||!u.active) return false;
+    if(u.collab_name && existing.has(u.collab_name.toLowerCase())) return false;
+    if(existing.has(u.name.toLowerCase())) return false;
+    return true;
+  });
+  if(!available.length){
+    root.innerHTML='<div style="padding:14px;color:var(--text-3);font-size:12px;text-align:center;font-style:italic;">Todos os usuários já estão cadastrados na matriz. 🎉</div>';
+    return;
+  }
+  const ROLE_LABELS = {superadmin:'Admin',admin:'Admin',manager:'Gestor',leader:'Líder',operational:'Operacional'};
+  const ROLE_COLORS = {superadmin:'var(--danger)',admin:'var(--danger)',manager:'var(--brown)',leader:'#0D2B8C',operational:'#6B7280'};
+
+  root.innerHTML = `<div style="display:flex;flex-direction:column;gap:8px;">
+    ${available.map(u => `
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--white);border:1.5px solid var(--border);border-radius:var(--r-lg);">
+        <div style="width:32px;height:32px;border-radius:8px;background:var(--bg2);color:var(--brown);display:flex;align-items:center;justify-content:center;font-family:'Fraunces',serif;font-size:12px;font-weight:700;flex-shrink:0;">${(u.name||'?').split(' ').map(w=>w[0]||'').slice(0,2).join('').toUpperCase()}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12.5px;font-weight:700;color:var(--text);">${u.name}</div>
+          <div style="font-size:10.5px;color:var(--text-2);">
+            <span style="font-weight:700;color:${ROLE_COLORS[u.role]||'#6B7280'};">${ROLE_LABELS[u.role]||u.role}</span>
+            ${u.collab_name?` · Vinculado a "${u.collab_name}"`:''}
+          </div>
+        </div>
+        <input type="text" id="imp-setor-${u.id}" placeholder="Setor" style="width:120px;padding:5px 8px;border:1.5px solid var(--border2);border-radius:var(--r-sm);font-family:'DM Sans',sans-serif;font-size:11px;color:var(--text);background:var(--bg);outline:none;">
+        <input type="text" id="imp-cargo-${u.id}" placeholder="Cargo" style="width:140px;padding:5px 8px;border:1.5px solid var(--border2);border-radius:var(--r-sm);font-family:'DM Sans',sans-serif;font-size:11px;color:var(--text);background:var(--bg);outline:none;">
+        <select id="imp-nivel-${u.id}" style="padding:5px 8px;border:1.5px solid var(--border2);border-radius:var(--r-sm);font-family:'DM Sans',sans-serif;font-size:11px;color:var(--text);background:var(--bg);cursor:pointer;">
+          <option value="1">1·Diretoria</option>
+          <option value="2">2·Gerência</option>
+          <option value="3">3·Coordenação</option>
+          <option value="4">4·Analista</option>
+          <option value="5" selected>5·Operacional</option>
+        </select>
+        <button onclick="importSupabaseUser('${u.id}','${(u.name||'').replace(/'/g,"\\'")}')" style="padding:6px 14px;background:var(--brown);color:#fff;border:none;border-radius:var(--r-sm);font-family:'DM Sans',sans-serif;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;transition:filter .15s;" onmouseover="this.style.filter='brightness(1.15)'" onmouseout="this.style.filter='none'">+ Importar</button>
+      </div>
+    `).join('')}
+  </div>`;
+}
+
+async function importSupabaseUser(profileId, name){
+  if(!name){ showToast('Nome do usuário inválido.'); return; }
+  if(data.collabs.some(c=>c.name.toLowerCase()===name.toLowerCase())){
+    showToast('Já existe um colaborador com esse nome.'); return;
+  }
+  const setor = (document.getElementById(`imp-setor-${profileId}`)?.value||'').trim()||'—';
+  const cargo = (document.getElementById(`imp-cargo-${profileId}`)?.value||'').trim()||'Colaborador';
+  const nivel = parseInt(document.getElementById(`imp-nivel-${profileId}`)?.value||'5');
+  const scores = {}; data.tasks.forEach(t=>scores[t.id]=null);
+  data.collabs.push({name, setor, cargo, shift:'—', nivel, obs:'', tasks:[], scores});
+  // Vincula o profile ao collab (para que role 1 veja o próprio card)
+  try{
+    await SB.from('profiles').update({collab_name:name}).eq('id',profileId);
+  }catch(e){ console.warn('vincular:',e.message); }
+  saveData(); render(); sbAudit('collab_add',{name,from:'supabase_import'});
+  showToast(`✓ ${name.split(' ')[0]} importado para a matriz!`);
+  loadSupabaseUsers();
+}
+
 /* ── Modelo de planilha ── */
 function downloadCollabTemplate(){
   const header = 'Nome;Setor;Cargo;Turno;Nivel(1-5)';
@@ -8420,7 +8557,8 @@ async function createUserFromCollab(collabName){
     const pr = await SB.from('profiles').insert({
       user_id: userId, org_id: currentUser.orgId,
       role, name: collabName, active: true,
-      collab_name: collabName, area_ids: [], subarea_ids: []
+      collab_name: collabName, area_ids: [], subarea_ids: [],
+      must_change_password: true
     });
     if(pr.error){ showToast('Perfil não criado: '+pr.error.message); return; }
     alert(`✅ Acesso criado!\n\nE-mail: ${email}\nSenha temporária: ${senhaTemp}\n\nCompartilhe com ${collabName.split(' ')[0]} e peça para alterar a senha no primeiro acesso.`);
