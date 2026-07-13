@@ -1172,7 +1172,15 @@ function wsKey(key){ return currentWS ? `ws_${currentWS}_${key}` : `ws_default_$
 const SB_URL = 'https://oudpqawjpwxogibvdjrc.supabase.co';
 const SB_KEY = 'sb_publishable_MoNPLyUnqFT-CjAg9hI8-A_3PaHyI6M';
 let SB = null;
-try { SB = window.supabase.createClient(SB_URL, SB_KEY); } catch(e) { console.warn('SB init:', e); }
+try {
+  SB = window.supabase.createClient(SB_URL, SB_KEY, {
+    auth: {
+      persistSession: false,   // Não guarda sessão no localStorage
+      autoRefreshToken: false, // Não renova token automaticamente
+      detectSessionInUrl: false
+    }
+  });
+} catch(e) { console.warn('SB init:', e); }
 
 const SB_ROLE_NUM = { superadmin:4, admin:4, manager:3, leader:2, operational:1 };
 
@@ -1259,11 +1267,8 @@ async function sbCarregarSessao(user){
 }
 
 async function sbInitSession(){
-  if(!SB) return;
-  try{
-    const r=await SB.auth.getSession();
-    if(r.data?.session?.user) await sbCarregarSessao(r.data.session.user);
-  }catch(e){ console.warn('sbInitSession:',e); }
+  // Sessão NÃO persistida — sempre mostra login ao abrir o site
+  return;
 }
 
 /* ══ Data layer: substituindo GCS ══ */
